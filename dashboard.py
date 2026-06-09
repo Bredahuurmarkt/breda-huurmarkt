@@ -139,9 +139,9 @@ with st.expander("⚙️ Filters", expanded=False):
     col1, col2 = st.columns(2)
     with col1:
         dagen = st.slider("Laatste N dagen", 1, 90, 30)
-        max_prijs = st.number_input("Max prijs (€)", 0, 5000, 0, 50)
+        max_prijs = st.number_input("Max prijs (€)", 0, 5000, 1200, 50)
     with col2:
-        min_opp = st.number_input("Min m²", 0, 200, 0, 5)
+        min_opp = st.number_input("Min m²", 0, 200, 50, 5)
         bronnen = st.multiselect("Bron", ["pararius","funda","huurwoningen","rentumo","huizenvinder","huurportaal"],
                                  default=["pararius","funda","huurwoningen","rentumo","huizenvinder","huurportaal"])
 
