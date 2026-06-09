@@ -226,20 +226,21 @@ for _, row in df.iterrows():
     else:
         contact_html = ""
 
-    st.markdown(f"""
-    <div class="woning-card">
-        {foto_html}
-        <a href="{link}" target="_blank" style="text-decoration:none; color:inherit;">
-            <div class="adres">{adres}</div>
-            {locatie_html}
-            <div class="prijs">{prijs}</div>
-            <div class="details">{details}</div>
-            <div class="details" style="color:#a0aec0; font-size:0.72rem;">Gevonden op {datum}</div>
-            <span class="bron-badge">{bron}</span>
-        </a>
-        {contact_html}
-    </div>
-    """, unsafe_allow_html=True)
+    kaart_html = (
+        '<div class="woning-card">'
+        f'{foto_html}'
+        f'<a href="{link}" target="_blank" style="text-decoration:none; color:inherit;">'
+        f'<div class="adres">{adres}</div>'
+        f'{locatie_html}'
+        f'<div class="prijs">{prijs}</div>'
+        f'<div class="details">{details}</div>'
+        f'<div class="details" style="color:#a0aec0; font-size:0.72rem;">Gevonden op {datum}</div>'
+        f'<span class="bron-badge">{bron}</span>'
+        '</a>'
+        f'{contact_html}'
+        '</div>'
+    )
+    st.markdown(kaart_html, unsafe_allow_html=True)
 
 # --- Grafiek ---
 st.markdown('<div class="sectie-titel">📈 Prijsontwikkeling</div>', unsafe_allow_html=True)
