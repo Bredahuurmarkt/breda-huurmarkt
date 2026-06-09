@@ -1,0 +1,25 @@
+# Breda Huurmarkt Monitor - Python dependencies
+
+# Anthropic Claude API (AI-samenvatting)
+anthropic>=0.40.0
+
+# Google Gmail API (alert-mails lezen)
+google-api-python-client>=2.150.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
+# Dashboard
+streamlit>=1.40.0
+
+# Data verwerking (dashboard tabellen + grafieken)
+pandas>=2.2.0
+
+# HTML parsen van alert-mails
+beautifulsoup4>=4.12.0
+lxml>=5.3.0
+
+# Config/secrets uit .env laden
+python-dotenv>=1.0.0
+
+# PostgreSQL driver (voor Supabase)
+psycopg2-binary>=2.9.0

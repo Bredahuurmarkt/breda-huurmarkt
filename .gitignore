@@ -1,0 +1,27 @@
+# Secrets en config - NOOIT in git
+.env
+credentials.json
+token.json
+
+# Database
+data/*.db
+data/*.db-journal
+data/*.sqlite
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
