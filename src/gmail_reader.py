@@ -105,13 +105,18 @@ def _extraheer_body(payload):
 
 
 def markeer_als_gelezen(message_id):
-    """Markeert een mail als gelezen zodat we hem niet dubbel verwerken."""
-    service = _get_service()
-    service.users().messages().modify(
-        userId="me",
-        id=message_id,
-        body={"removeLabelIds": ["UNREAD"]}
-    ).execute()
+    """Markeert een mail als gelezen. Vereist gmail.modify scope.
+    Als het token alleen leesrechten heeft, slaan we dit netjes over —
+    de database-deduplicatie voorkomt toch al dubbele woningen."""
+    try:
+        service = _get_service()
+        service.users().messages().modify(
+            userId="me",
+            id=message_id,
+            body={"removeLabelIds": ["UNREAD"]}
+        ).execute()
+    except Exception as e:
+        print(f"   (mail niet als gelezen gemarkeerd — leesrechten only; geen probleem: {e})")
 
 
 if __name__ == "__main__":

@@ -26,6 +26,8 @@ def verwerk_mail(mail: dict) -> list:
         return _parseer_generiek(mail, "huizenvinder", r"huizenvinder\.nl")
     elif "huurportaal" in afzender:
         return _parseer_generiek(mail, "huurportaal", r"huurportaal\.nl")
+    elif "ikwilhuren" in afzender or "ikwilhuren.nu" in mail.get("body", ""):
+        return _parseer_ikwilhuren(mail)
     else:
         return []
 
@@ -158,6 +160,59 @@ def _parseer_datum(datum_str: str) -> str:
 def _maak_id(url: str) -> str:
     """Maakt een korte unieke ID op basis van de URL."""
     return hashlib.md5(url.encode()).hexdigest()[:12]
+
+
+def _parseer_ikwilhuren(mail: dict) -> list:
+    """Parser voor ikwilhuren.nu alert-mails. Haalt adres, prijs, m², foto en makelaar op."""
+    soup = BeautifulSoup(mail["body"], "html.parser")
+    listings = []
+    gezien = set()
+
+    for link_tag in soup.find_all("a", href=re.compile(r"ikwilhuren\.nu/object")):
+        href = link_tag.get("href", "")
+        if href in gezien:
+            continue
+        gezien.add(href)
+
+        container = link_tag.find_parent(["td", "div", "li", "tr", "article", "table"])
+        tekst = container.get_text(" ", strip=True) if container else link_tag.get_text(" ", strip=True)
+
+        # Foto: zoek een img binnen de container
+        foto_url = ""
+        if container:
+            img = container.find("img")
+            if img and img.get("src"):
+                foto_url = img["src"]
+                if foto_url.startswith("/"):
+                    foto_url = "https://ikwilhuren.nu" + foto_url
+
+        # Makelaar + telefoon uit de tekst halen (als aanwezig)
+        makelaar = ""
+        m_mak = re.search(r"(MVGM|Rots-?Vast|Vesteda|Bouwinvest|[A-Z][a-z]+\s+Makelaars?)", tekst)
+        if m_mak:
+            makelaar = m_mak.group(1).strip()
+        makelaar_tel = ""
+        m_tel = re.search(r"(\+?31\s?\d[\d\s]{7,})", tekst)
+        if m_tel:
+            makelaar_tel = re.sub(r"\s+", "", m_tel.group(1))
+
+        listings.append({
+            "bron": "ikwilhuren",
+            "externe_id": _maak_id(href),
+            "adres": _extraheer_adres(tekst) or link_tag.get_text(strip=True)[:80],
+            "stad": "Breda",
+            "prijs": _extraheer_prijs(tekst),
+            "oppervlakte": _extraheer_oppervlakte(tekst),
+            "kamers": _extraheer_kamers(tekst),
+            "foto_url": foto_url,
+            "makelaar": makelaar,
+            "makelaar_tel": makelaar_tel,
+            "makelaar_link": href,
+            "link": href,
+            "gevonden_op": _parseer_datum(mail.get("datum", "")),
+        })
+
+    return listings
 
 
 def _parseer_generiek(mail: dict, bron: str, url_patroon: str) -> list:

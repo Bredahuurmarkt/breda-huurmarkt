@@ -198,7 +198,8 @@ def haal_listings_op(dagen=30, limit=500) -> list:
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT id, bron, externe_id, adres, stad, prijs, oppervlakte, kamers, link, gevonden_op
+                    SELECT id, bron, externe_id, adres, wijk, stad, prijs, oppervlakte, kamers,
+                           bouwjaar, foto_url, makelaar, makelaar_tel, makelaar_link, link, gevonden_op
                     FROM listings
                     WHERE actief = TRUE
                     AND gevonden_op::timestamptz >= NOW() - (INTERVAL '1 day' * %s)
@@ -255,7 +256,8 @@ def haal_nieuwe_listings_op(datum: str) -> list:
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT id, bron, externe_id, adres, stad, prijs, oppervlakte, kamers, link, gevonden_op
+                    SELECT id, bron, externe_id, adres, wijk, stad, prijs, oppervlakte, kamers,
+                           bouwjaar, foto_url, makelaar, makelaar_tel, makelaar_link, link, gevonden_op
                     FROM listings WHERE gevonden_op >= %s ORDER BY gevonden_op DESC
                 """, (datum,))
                 cols = [d[0] for d in cur.description]
