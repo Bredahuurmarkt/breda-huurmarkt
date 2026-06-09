@@ -195,23 +195,49 @@ st.markdown(f"""
 st.markdown('<div class="sectie-titel">🏡 Woningaanbod</div>', unsafe_allow_html=True)
 
 for _, row in df.iterrows():
-    adres = row.get("adres") or "Adres onbekend"
-    prijs = f"€{int(row['prijs'])}/mnd" if pd.notna(row.get("prijs")) else "Prijs onbekend"
-    opp = f"{int(row['oppervlakte'])} m²" if pd.notna(row.get("oppervlakte")) else ""
-    kamers = f"{int(row['kamers'])} kamers" if pd.notna(row.get("kamers")) else ""
-    details = " · ".join(filter(None, [opp, kamers]))
-    datum = row["gevonden_op"].strftime("%d-%m om %H:%M")
-    link = row.get("link", "#")
-    bron = row.get("bron", "").capitalize()
+    adres   = row.get("adres") or "Adres onbekend"
+    wijk    = row.get("wijk") or ""
+    prijs   = f"€{int(row['prijs'])}/mnd" if pd.notna(row.get("prijs")) else "Prijs onbekend"
+    opp     = f"{int(row['oppervlakte'])} m²" if pd.notna(row.get("oppervlakte")) else ""
+    kamers  = f"{int(row['kamers'])} kamer(s)" if pd.notna(row.get("kamers")) else ""
+    bouwjaar = f"Bouwjaar {int(row['bouwjaar'])}" if pd.notna(row.get("bouwjaar")) else ""
+    details = " · ".join(filter(None, [opp, kamers, bouwjaar]))
+    datum   = row["gevonden_op"].strftime("%d-%m om %H:%M")
+    link    = row.get("link", "#")
+    bron    = row.get("bron", "").capitalize()
+    foto    = row.get("foto_url") or ""
+    makelaar      = row.get("makelaar") or ""
+    makelaar_tel  = row.get("makelaar_tel") or ""
+    makelaar_link = row.get("makelaar_link") or ""
+
+    # Foto
+    foto_html = f'<img src="{foto}" style="width:100%; border-radius:8px; margin-bottom:0.75rem; object-fit:cover; max-height:180px;">' if foto else ""
+
+    # Locatie
+    locatie_html = f'<div class="details">📍 {wijk}, Breda</div>' if wijk else f'<div class="details">📍 Breda</div>'
+
+    # Contact
+    if makelaar_tel:
+        contact_html = f'<a href="tel:{makelaar_tel}" style="display:inline-block; margin-top:0.5rem; background:#2b6cb0; color:white; padding:6px 14px; border-radius:8px; font-size:0.8rem; text-decoration:none;">📞 {makelaar or "Bel makelaar"}</a>'
+    elif makelaar_link:
+        contact_html = f'<a href="{makelaar_link}" target="_blank" style="display:inline-block; margin-top:0.5rem; background:#2b6cb0; color:white; padding:6px 14px; border-radius:8px; font-size:0.8rem; text-decoration:none;">✉️ {makelaar or "Contact makelaar"}</a>'
+    elif makelaar:
+        contact_html = f'<div class="details" style="margin-top:0.4rem;">🏢 {makelaar}</div>'
+    else:
+        contact_html = ""
 
     st.markdown(f"""
     <div class="woning-card">
-        <a href="{link}" target="_blank">
+        {foto_html}
+        <a href="{link}" target="_blank" style="text-decoration:none; color:inherit;">
             <div class="adres">{adres}</div>
+            {locatie_html}
             <div class="prijs">{prijs}</div>
-            <div class="details">{details + (' · ' if details else '') + datum}</div>
+            <div class="details">{details}</div>
+            <div class="details" style="color:#a0aec0; font-size:0.72rem;">Gevonden op {datum}</div>
             <span class="bron-badge">{bron}</span>
         </a>
+        {contact_html}
     </div>
     """, unsafe_allow_html=True)
 

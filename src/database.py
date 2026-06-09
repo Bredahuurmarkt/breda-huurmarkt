@@ -48,24 +48,37 @@ def _initialiseer_postgres():
         with conn.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS listings (
-                    id          SERIAL PRIMARY KEY,
-                    bron        TEXT NOT NULL,
-                    externe_id  TEXT,
-                    adres       TEXT,
-                    stad        TEXT DEFAULT 'Breda',
-                    prijs       INTEGER,
-                    oppervlakte INTEGER,
-                    kamers      INTEGER,
-                    link        TEXT,
-                    gevonden_op TEXT NOT NULL,
-                    actief      BOOLEAN DEFAULT TRUE,
+                    id              SERIAL PRIMARY KEY,
+                    bron            TEXT NOT NULL,
+                    externe_id      TEXT,
+                    adres           TEXT,
+                    wijk            TEXT,
+                    stad            TEXT DEFAULT 'Breda',
+                    prijs           INTEGER,
+                    oppervlakte     INTEGER,
+                    kamers          INTEGER,
+                    bouwjaar        INTEGER,
+                    foto_url        TEXT,
+                    makelaar        TEXT,
+                    makelaar_tel    TEXT,
+                    makelaar_link   TEXT,
+                    link            TEXT,
+                    gevonden_op     TEXT NOT NULL,
+                    actief          BOOLEAN DEFAULT TRUE,
                     UNIQUE(bron, externe_id)
                 )
             """)
-            # Voeg actief kolom toe als die nog niet bestaat (migratie)
-            cur.execute("""
-                ALTER TABLE listings ADD COLUMN IF NOT EXISTS actief BOOLEAN DEFAULT TRUE
-            """)
+            # Migratie: voeg nieuwe kolommen toe als ze nog niet bestaan
+            for kolom, type_ in [
+                ("actief", "BOOLEAN DEFAULT TRUE"),
+                ("wijk", "TEXT"),
+                ("bouwjaar", "INTEGER"),
+                ("foto_url", "TEXT"),
+                ("makelaar", "TEXT"),
+                ("makelaar_tel", "TEXT"),
+                ("makelaar_link", "TEXT"),
+            ]:
+                cur.execute(f"ALTER TABLE listings ADD COLUMN IF NOT EXISTS {kolom} {type_}")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS samenvattingen (
                     id          SERIAL PRIMARY KEY,
@@ -122,17 +135,24 @@ def _sla_op_postgres(listing: dict) -> bool:
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO listings (bron, externe_id, adres, stad, prijs, oppervlakte, kamers, link, gevonden_op)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO listings (bron, externe_id, adres, wijk, stad, prijs, oppervlakte, kamers,
+                                      bouwjaar, foto_url, makelaar, makelaar_tel, makelaar_link, link, gevonden_op)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (bron, externe_id) DO NOTHING
             """, (
                 listing.get("bron", "onbekend"),
                 listing.get("externe_id"),
                 listing.get("adres"),
+                listing.get("wijk"),
                 listing.get("stad", "Breda"),
                 listing.get("prijs"),
                 listing.get("oppervlakte"),
                 listing.get("kamers"),
+                listing.get("bouwjaar"),
+                listing.get("foto_url"),
+                listing.get("makelaar"),
+                listing.get("makelaar_tel"),
+                listing.get("makelaar_link"),
                 listing.get("link"),
                 listing.get("gevonden_op", datetime.now().isoformat()),
             ))
