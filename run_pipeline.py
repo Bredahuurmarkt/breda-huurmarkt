@@ -9,10 +9,9 @@ import sys
 import argparse
 from datetime import date, timedelta
 
-from src.database import initialiseer_database, haal_nieuwe_listings_op, tel_listings
+from src.database import initialiseer_database, haal_nieuwe_listings_op, tel_listings, sla_listing_op, deactiveer_oude_listings
 from src.gmail_reader import haal_alert_mails_op, haal_mail_inhoud_op, markeer_als_gelezen
 from src.parser import verwerk_mail
-from src.database import sla_listing_op
 
 
 def main(droog: bool = False):
@@ -23,6 +22,11 @@ def main(droog: bool = False):
     # Stap 1: database gereedmaken
     initialiseer_database()
     print(f"Database: {tel_listings()} bestaande listings")
+
+    # Verlopen woningen automatisch deactiveren (ouder dan 21 dagen)
+    verlopen = deactiveer_oude_listings(max_dagen=21)
+    if verlopen:
+        print(f"  {verlopen} verlopen woning(en) gedeactiveerd (>21 dagen oud)")
 
     # Stap 2: alert-mails ophalen
     print("\n[1/4] Alert-mails ophalen uit Gmail...")

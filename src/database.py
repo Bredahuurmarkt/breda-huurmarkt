@@ -58,8 +58,13 @@ def _initialiseer_postgres():
                     kamers      INTEGER,
                     link        TEXT,
                     gevonden_op TEXT NOT NULL,
+                    actief      BOOLEAN DEFAULT TRUE,
                     UNIQUE(bron, externe_id)
                 )
+            """)
+            # Voeg actief kolom toe als die nog niet bestaat (migratie)
+            cur.execute("""
+                ALTER TABLE listings ADD COLUMN IF NOT EXISTS actief BOOLEAN DEFAULT TRUE
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS samenvattingen (
@@ -167,6 +172,7 @@ def _sla_op_sqlite(listing: dict) -> bool:
 
 
 def haal_listings_op(dagen=30, limit=500) -> list:
+    """Haalt alleen actieve listings op — verlopen woningen worden automatisch uitgefilterd."""
     if USE_POSTGRES:
         conn = _verbinding()
         try:
@@ -174,7 +180,8 @@ def haal_listings_op(dagen=30, limit=500) -> list:
                 cur.execute("""
                     SELECT id, bron, externe_id, adres, stad, prijs, oppervlakte, kamers, link, gevonden_op
                     FROM listings
-                    WHERE gevonden_op::timestamptz >= NOW() - (INTERVAL '1 day' * %s)
+                    WHERE actief = TRUE
+                    AND gevonden_op::timestamptz >= NOW() - (INTERVAL '1 day' * %s)
                     ORDER BY gevonden_op DESC
                     LIMIT %s
                 """, (dagen, limit))
@@ -188,10 +195,38 @@ def haal_listings_op(dagen=30, limit=500) -> list:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("""
                 SELECT * FROM listings
-                WHERE gevonden_op >= datetime('now', ?)
+                WHERE actief = 1
+                AND gevonden_op >= datetime('now', ?)
                 ORDER BY gevonden_op DESC LIMIT ?
             """, (f"-{dagen} days", limit)).fetchall()
             return [dict(r) for r in rows]
+
+
+def deactiveer_oude_listings(max_dagen=21):
+    """Markeert woningen als inactief als ze ouder zijn dan max_dagen dagen."""
+    if USE_POSTGRES:
+        conn = _verbinding()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE listings SET actief = FALSE
+                    WHERE actief = TRUE
+                    AND gevonden_op::timestamptz < NOW() - (INTERVAL '1 day' * %s)
+                """, (max_dagen,))
+                aantal = cur.rowcount
+            conn.commit()
+            return aantal
+        finally:
+            conn.close()
+    else:
+        with _verbinding() as conn:
+            cur = conn.execute("""
+                UPDATE listings SET actief = 0
+                WHERE actief = 1
+                AND gevonden_op < datetime('now', ?)
+            """, (f"-{max_dagen} days",))
+            conn.commit()
+            return cur.rowcount
 
 
 def haal_nieuwe_listings_op(datum: str) -> list:
