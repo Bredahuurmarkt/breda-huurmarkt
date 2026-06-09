@@ -143,7 +143,12 @@ if not listings:
     st.stop()
 
 df_alle = pd.DataFrame(listings)
-df_alle["gevonden_op"] = pd.to_datetime(df_alle["gevonden_op"])
+# Datums tijdzone-veilig maken: alles naar UTC, dan naar NL-tijd, dan tz weghalen
+df_alle["gevonden_op"] = (
+    pd.to_datetime(df_alle["gevonden_op"], utc=True, errors="coerce")
+    .dt.tz_convert("Europe/Amsterdam")
+    .dt.tz_localize(None)
+)
 beschikbare_bronnen = sorted(df_alle["bron"].dropna().unique().tolist())
 
 # --- Filters (compact) ---
