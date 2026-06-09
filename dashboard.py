@@ -134,26 +134,33 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# --- Data eerst ophalen (zodat filters de echte bronnen kennen) ---
+dagen_default = 30
+listings = haal_listings_op(dagen=90)  # ruim ophalen, daarna filteren in UI
+
+if not listings:
+    st.info("⏳ Nog geen woningen — de eerste alerts komen vanzelf binnen via je e-mailalerts!")
+    st.stop()
+
+df_alle = pd.DataFrame(listings)
+df_alle["gevonden_op"] = pd.to_datetime(df_alle["gevonden_op"])
+beschikbare_bronnen = sorted(df_alle["bron"].dropna().unique().tolist())
+
 # --- Filters (compact) ---
 with st.expander("⚙️ Filters", expanded=False):
     col1, col2 = st.columns(2)
     with col1:
-        dagen = st.slider("Laatste N dagen", 1, 90, 30)
+        dagen = st.slider("Laatste N dagen", 1, 90, dagen_default)
         max_prijs = st.number_input("Max prijs (€)", 0, 5000, 1200, 50)
     with col2:
         min_opp = st.number_input("Min m²", 0, 200, 50, 5)
-        bronnen = st.multiselect("Bron", ["pararius","funda","huurwoningen","rentumo","huizenvinder","huurportaal"],
-                                 default=["pararius","funda","huurwoningen","rentumo","huizenvinder","huurportaal"])
+        # Standaard: ALLE bronnen die in de data zitten aangevinkt
+        bronnen = st.multiselect("Bron", beschikbare_bronnen, default=beschikbare_bronnen)
 
-# --- Data ophalen ---
-listings = haal_listings_op(dagen=dagen)
-
-if not listings:
-    st.info("⏳ Nog geen woningen — de eerste alerts komen morgenochtend vroeg binnen!")
-    st.stop()
-
-df = pd.DataFrame(listings)
-df["gevonden_op"] = pd.to_datetime(df["gevonden_op"])
+# Tijdsfilter toepassen op basis van de slider
+from datetime import timedelta
+grens = pd.Timestamp.now() - pd.Timedelta(days=dagen)
+df = df_alle[df_alle["gevonden_op"] >= grens].copy()
 
 # Filters toepassen
 if max_prijs > 0:
