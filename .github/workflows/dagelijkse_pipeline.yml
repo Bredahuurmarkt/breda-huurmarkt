@@ -1,0 +1,51 @@
+name: Dagelijkse Huurmarkt Pipeline
+
+on:
+  schedule:
+    # Elke dag om 07:00 UTC = 08:00 of 09:00 Nederlandse tijd
+    - cron: '0 7 * * *'
+  workflow_dispatch:  # Handmatig starten via GitHub website
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Python installeren
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Packages installeren
+        run: pip install -r requirements.txt
+
+      - name: Gmail credentials aanmaken
+        run: |
+          echo "${{ secrets.GMAIL_CREDENTIALS_JSON }}" | base64 -d > credentials.json
+          echo "${{ secrets.GMAIL_TOKEN_JSON }}" | base64 -d > token.json
+
+      - name: .env aanmaken
+        run: |
+          cat > .env << EOF
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL=claude-sonnet-4-6
+          GMAIL_CREDENTIALS_FILE=credentials.json
+          GMAIL_TOKEN_FILE=token.json
+          ALERT_SENDERS=${{ secrets.ALERT_SENDERS }}
+          NOTIFY_TO=${{ secrets.NOTIFY_TO }}
+          NOTIFY_FROM=${{ secrets.NOTIFY_FROM }}
+          GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          DATABASE_PATH=data/huurmarkt.db
+          STAD=Breda
+          EOF
+
+      - name: Pipeline draaien
+        run: python run_pipeline.py
+
+      - name: Resultaat tonen
+        if: always()
+        run: echo "Pipeline klaar op $(date)"
