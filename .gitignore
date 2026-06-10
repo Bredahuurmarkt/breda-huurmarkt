@@ -2,6 +2,9 @@
 .env
 credentials.json
 token.json
+credentials_b64.txt
+token_b64.txt
+setup_github_secrets.py
 
 # Database
 data/*.db
