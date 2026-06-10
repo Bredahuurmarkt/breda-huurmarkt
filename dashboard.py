@@ -1,12 +1,17 @@
 import streamlit as st
 import pandas as pd
+import requests
 from datetime import date
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.database import initialiseer_database, haal_listings_op, tel_listings
+from src.database import initialiseer_database, haal_listings_op, tel_listings, _get_secret
+
+GITHUB_TOKEN = _get_secret("GITHUB_TOKEN", "")
+GITHUB_REPO = "Bredahuurmarkt/breda-huurmarkt"
+GITHUB_WORKFLOW = "dagelijkse_pipeline.yml"
 
 st.set_page_config(
     page_title="Breda Huurmarkt",
@@ -133,6 +138,24 @@ st.markdown(f"""
     <p>Bijgewerkt op {date.today().strftime('%d %B %Y')}</p>
 </div>
 """, unsafe_allow_html=True)
+
+# --- Handmatig mail ophalen ---
+if st.button("📬 Nu mail checken", use_container_width=True):
+    if not GITHUB_TOKEN:
+        st.error("GITHUB_TOKEN ontbreekt in de secrets — kan de pipeline niet starten.")
+    else:
+        resp = requests.post(
+            f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW}/dispatches",
+            headers={
+                "Authorization": f"token {GITHUB_TOKEN}",
+                "Accept": "application/vnd.github+json",
+            },
+            json={"ref": "main"},
+        )
+        if resp.status_code == 204:
+            st.success("Pipeline gestart! Dit duurt ongeveer 30-60 seconden — ververs deze pagina daarna voor nieuwe woningen.")
+        else:
+            st.error(f"Kon de pipeline niet starten ({resp.status_code}): {resp.text}")
 
 # --- Data eerst ophalen (zodat filters de echte bronnen kennen) ---
 dagen_default = 30
