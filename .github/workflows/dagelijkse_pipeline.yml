@@ -39,6 +39,8 @@ jobs:
           NOTIFY_TO=${{ secrets.NOTIFY_TO }}
           NOTIFY_FROM=${{ secrets.NOTIFY_FROM }}
           GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
+          WHATSAPP_PHONE=${{ secrets.WHATSAPP_PHONE }}
+          WHATSAPP_APIKEY=${{ secrets.WHATSAPP_APIKEY }}
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           DATABASE_PATH=data/huurmarkt.db
           STAD=Breda

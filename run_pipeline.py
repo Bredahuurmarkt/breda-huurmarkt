@@ -77,16 +77,22 @@ def main(droog: bool = False):
 
     print(f"\n  {samenvatting[:200]}{'...' if len(samenvatting) > 200 else ''}")
 
-    # Stap 5: e-mail versturen
-    print("\n[4/4] Overzicht e-mailen...")
+    # Stap 5: e-mail en WhatsApp versturen
+    print("\n[4/4] Overzicht versturen...")
     if droog:
-        print("  --droog modus: e-mail overgeslagen")
+        print("  --droog modus: e-mail en WhatsApp overgeslagen")
     else:
         try:
             from src.notifier import stuur_dagelijks_overzicht
             stuur_dagelijks_overzicht(samenvatting, nieuwe_listings)
         except Exception as e:
             print(f"  E-mail mislukt: {e}")
+
+        try:
+            from src.whatsapp import stuur_nieuwe_woningen_whatsapp
+            stuur_nieuwe_woningen_whatsapp(nieuwe_listings)
+        except Exception as e:
+            print(f"  WhatsApp mislukt: {e}")
 
     print("\n✓ Pipeline klaar")
     print(f"  Database bevat nu {tel_listings()} listings")
