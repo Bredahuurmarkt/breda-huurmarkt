@@ -2,30 +2,20 @@ import os
 from datetime import date
 from anthropic import Anthropic
 from dotenv import load_dotenv
-from src.database import haal_nieuwe_listings_op, sla_samenvatting_op
+from src.database import sla_samenvatting_op
 
 load_dotenv()
 
 MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
 
-def genereer_dagelijkse_samenvatting(datum_str: str | None = None) -> str:
+def genereer_samenvatting(listings: list) -> str:
     """
-    Vraagt Claude om een dagelijks Breda-huurmarkt overzicht te schrijven.
-    datum_str: ISO-datumstring (start van de dag). Standaard: vandaag.
+    Vraagt Claude om een kort overzicht te schrijven van de net gevonden nieuwe listings.
+    Wordt alleen aangeroepen als er ook echt nieuwe woningen zijn (scheelt tokens bij uurlijkse runs).
     """
-    if datum_str is None:
-        datum_str = date.today().isoformat() + "T00:00:00"
-
-    listings = haal_nieuwe_listings_op(datum_str)
-
-    if not listings:
-        tekst = f"Geen nieuwe huurwoningen gevonden op {datum_str[:10]}."
-        sla_samenvatting_op(datum_str[:10], tekst)
-        return tekst
-
     listings_tekst = _listings_naar_tekst(listings)
-    prompt = _maak_prompt(listings_tekst, datum_str[:10])
+    prompt = _maak_prompt(listings_tekst, date.today().isoformat())
 
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     bericht = client.messages.create(
@@ -35,7 +25,7 @@ def genereer_dagelijkse_samenvatting(datum_str: str | None = None) -> str:
     )
     tekst = bericht.content[0].text
 
-    sla_samenvatting_op(datum_str[:10], tekst)
+    sla_samenvatting_op(date.today().isoformat(), tekst)
     return tekst
 
 
@@ -53,11 +43,11 @@ def _listings_naar_tekst(listings: list) -> str:
 def _maak_prompt(listings_tekst: str, datum: str) -> str:
     return f"""Je bent een assistent die de huurmarkt in Breda bijhoudt voor iemand die op zoek is naar een huurwoning.
 
-Vandaag ({datum}) zijn de volgende nieuwe huurwoningen gevonden:
+Zojuist ({datum}) zijn de volgende nieuwe huurwoningen gevonden:
 
 {listings_tekst}
 
-Schrijf een kort, vriendelijk dagelijks overzicht (maximaal 150 woorden) in het Nederlands:
+Schrijf een kort, vriendelijk overzicht (maximaal 100 woorden) in het Nederlands:
 - Hoeveel nieuwe woningen zijn er gevonden?
 - Wat is het prijsbereik?
 - Zijn er opvallende aanbiedingen (groot, goedkoop, of juist duur)?

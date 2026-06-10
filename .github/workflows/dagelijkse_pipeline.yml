@@ -1,10 +1,11 @@
-name: Dagelijkse Huurmarkt Pipeline
+name: Huurmarkt Pipeline
 
 on:
   schedule:
-    # Elke dag om 07:00 UTC = 08:00 of 09:00 Nederlandse tijd
-    - cron: '0 7 * * *'
-  workflow_dispatch:  # Handmatig starten via GitHub website
+    # Elk heel uur tussen 09:00-17:00 Nederlandse tijd (07:00-15:00 UTC, zomertijd)
+    # In de winter (UTC+1) is dit 08:00-16:00 NL-tijd
+    - cron: '0 7-15 * * *'
+  workflow_dispatch:  # Handmatig starten via GitHub website / dashboard-knop
 
 jobs:
   pipeline:

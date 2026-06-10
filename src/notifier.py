@@ -21,7 +21,7 @@ def stuur_dagelijks_overzicht(samenvatting: str, nieuwe_listings: list, datum: s
     if datum is None:
         datum = date.today().strftime("%d %B %Y")
 
-    onderwerp = f"Breda Huurmarkt — {datum}"
+    onderwerp = f"🏠 Breda Huurmarkt — {len(nieuwe_listings)} nieuwe woning(en)"
     html_body = _maak_html(samenvatting, nieuwe_listings, datum)
     tekst_body = _maak_tekst(samenvatting, nieuwe_listings)
 
