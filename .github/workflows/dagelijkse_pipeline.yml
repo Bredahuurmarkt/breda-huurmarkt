@@ -7,6 +7,9 @@ on:
     # Bewust NIET op :00 — dat is het drukste moment voor GitHub's scheduler,
     # waardoor cron-runs op het hele uur vaak vertraagd of overgeslagen worden.
     - cron: '5,35 7-15 * * *'
+    # TIJDELIJK — testcron om te checken of GitHub's scheduler hier uberhaupt
+    # zelfstandig draait. Wordt na de test weer verwijderd.
+    - cron: '*/10 * * * *'
   workflow_dispatch:  # Handmatig starten via GitHub website / dashboard-knop
 
 jobs:
