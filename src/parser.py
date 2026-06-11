@@ -21,7 +21,7 @@ def verwerk_mail(mail: dict) -> list:
         from src.parser_google_alerts import parseer_google_alert
         return parseer_google_alert(mail)
     elif "rentumo" in afzender:
-        return _parseer_generiek(mail, "rentumo", r"getrentumo\.nl")
+        return _parseer_rentumo(mail)
     elif "huizenvinder" in afzender:
         return _parseer_generiek(mail, "huizenvinder", r"huizenvinder\.nl")
     elif "huurportaal" in afzender:
@@ -209,6 +209,73 @@ def _parseer_ikwilhuren(mail: dict) -> list:
             "makelaar_tel": makelaar_tel,
             "makelaar_link": href,
             "link": href,
+            "gevonden_op": _parseer_datum(mail.get("datum", "")),
+        })
+
+    return listings
+
+
+def _rentumo_adres_van_slug(slug: str) -> str:
+    """Maakt een leesbaar adres van een Rentumo URL-slug, bijv.
+    'te-huur-appartement-handellaan-88-in-breda-525657' -> 'Handellaan 88'."""
+    s = re.sub(r"-\d+$", "", slug)  # interne advertentie-ID eraf
+    s = re.sub(r"^te-huur-appartement-", "", s)
+    s = re.sub(r"^te-huur-", "", s)
+    s = re.sub(r"-in-breda$", "", s)
+    s = re.sub(r"-breda$", "", s)
+    s = re.sub(r"-\d{4}-[a-z]{2}$", "", s)  # postcode eraf
+    return s.replace("-", " ").title()
+
+
+def _parseer_rentumo(mail: dict) -> list:
+    """
+    Parser voor Rentumo alert-mails.
+
+    Rentumo verstuurt links via een Mailchimp-trackingredirect
+    (go.getrentumo.nl/CL0/<urlencoded-doel-url>/<volgnummer>/...) waarbij hetzelfde
+    listing meerdere keren met een ander volgnummer voorkomt. We dedupliceren daarom
+    op de slug van de daadwerkelijke advertentie i.p.v. de volledige trackinglink, en
+    leiden het adres af uit die slug omdat de omringende teksten vaak afgekapt zijn.
+    """
+    soup = BeautifulSoup(mail["body"], "html.parser")
+    listings = []
+    gezien = set()
+
+    for link_tag in soup.find_all("a", href=re.compile(r"getrentumo\.nl")):
+        href = link_tag.get("href", "")
+        match = re.search(r"advertentie%2F([a-zA-Z0-9\-]+)", href)
+        if not match:
+            continue
+        slug = match.group(1)
+        if slug in gezien:
+            continue
+        gezien.add(slug)
+
+        # Zoek de eerste bovenliggende container met een prijs erin
+        container_tekst = ""
+        node = link_tag
+        for _ in range(10):
+            node = node.parent
+            if node is None:
+                break
+            tekst = node.get_text(" ", strip=True)
+            if "€" in tekst and len(tekst) < 150:
+                container_tekst = tekst
+                break
+
+        prijs = _extraheer_prijs(container_tekst)
+        if not prijs:
+            continue  # Geen prijs = geen echte listing (bijv. de "bekijk je matches"-link)
+
+        listings.append({
+            "bron": "rentumo",
+            "externe_id": _maak_id(slug),
+            "adres": _rentumo_adres_van_slug(slug),
+            "stad": "Breda",
+            "prijs": prijs,
+            "oppervlakte": _extraheer_oppervlakte(container_tekst),
+            "kamers": _extraheer_kamers(container_tekst),
+            "link": f"https://rentumo.nl/advertentie/{slug}",
             "gevonden_op": _parseer_datum(mail.get("datum", "")),
         })
 

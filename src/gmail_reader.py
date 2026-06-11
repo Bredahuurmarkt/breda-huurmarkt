@@ -37,11 +37,17 @@ def _get_service():
 
 
 def haal_alert_mails_op(max_results=50):
-    """Haalt ongelezen alert-mails op van de bekende afzenders."""
+    """Haalt recente alert-mails op van de bekende afzenders.
+
+    Let op: filtert NIET op is:unread. Veel mailapps (telefoon-pushmeldingen)
+    markeren mails al als gelezen voordat de pipeline draait, waardoor een
+    is:unread-filter nieuwe woningen kan missen. In plaats daarvan kijken we
+    naar de afgelopen dag en laten we de database (UNIQUE op bron+externe_id)
+    de deduplicatie doen — al verwerkte listings worden dus nooit dubbel
+    opgeslagen of gemeld."""
     service = _get_service()
 
-    zoekopdracht = " OR ".join(f"from:{afzender}" for afzender in ALERT_SENDERS)
-    zoekopdracht += " is:unread"
+    zoekopdracht = "(" + " OR ".join(f"from:{afzender}" for afzender in ALERT_SENDERS) + ") newer_than:1d"
 
     resultaat = service.users().messages().list(
         userId="me",
@@ -50,7 +56,7 @@ def haal_alert_mails_op(max_results=50):
     ).execute()
 
     berichten = resultaat.get("messages", [])
-    print(f"{len(berichten)} ongelezen alert-mail(s) gevonden.")
+    print(f"{len(berichten)} alert-mail(s) van de afgelopen dag gevonden.")
     return berichten
 
 
