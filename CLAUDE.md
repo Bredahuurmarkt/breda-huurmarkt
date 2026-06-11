@@ -19,15 +19,24 @@ zelf versturen naar de Gmail-inbox van de gebruiker. Volledig legaal, geen captc
 
 ## Pipeline
 ```
-Gmail API leest alert-mails
-  -> Parser haalt listings eruit (adres, prijs, m2, kamers, link, bron, datum)
-  -> Deduplicatie tegen database
-  -> Nieuwe listings opslaan in SQLite
-  -> Claude API genereert dagelijkse samenvatting
-  -> Samenvatting versturen via e-mail
-  -> Streamlit dashboard leest laatste stand uit database
+Gmail API leest alert-mails (newer_than:1d, NIET is:unread — telefoonmeldingen
+                             markeren mails als gelezen vóór de pipeline draait)
+  -> Parser haalt listings eruit (adres, prijs, m2, kamers, foto, link, bron, datum)
+  -> Deduplicatie tegen database (UNIQUE op bron+externe_id)
+  -> Nieuwe listings opslaan in Supabase (PostgreSQL)
+  -> Claude API genereert samenvatting (alleen bij echt nieuwe woningen)
+  -> E-mail (woningkaarten met foto) + Telegram (sendPhoto per woning)
+  -> Streamlit dashboard (breda-huurmarkt.streamlit.app) leest live uit Supabase
 ```
-De "24/7" zit in een scheduler (later: GitHub Actions), niet in een continu draaiende AI.
+
+## Planning (belangrijk!)
+**GitHub's eigen cron vuurt NOOIT voor deze repo** (bewezen: 0 van de 27+ tikken,
+ook na disable/enable-reset). De echte planner is **Supabase pg_cron**:
+- Job `huurmarkt-pipeline-trigger`, schedule `20,50 7-15 * * *` (UTC)
+- Roept via pg_net de GitHub workflow_dispatch API aan (PAT in de job-SQL)
+- Beheren: `SELECT * FROM cron.job;` / logs: `SELECT * FROM cron.job_run_details;`
+- De GitHub-schedule (`5,35 7-15 * * *`) blijft als gratis backup staan
+- Ochtendcheck-Telegram max 1x/dag via `claim_ochtendcheck()` (systeem_status-tabel)
 
 ## Tech stack (al besloten — niet heroverwegen)
 | Component | Technologie |
@@ -84,25 +93,22 @@ Funda + Huurwoningen.nl, GitHub Actions + Supabase, Telegram bot, trendanalyse, 
 - Alle secrets in `.env`, nooit hardcoded.
 - Schrijf in het Nederlands (behalve code/variabelen/comments).
 
-## Status / voortgang
-- [x] Python 3.12 geïnstalleerd
-- [x] Projectstructuur aangemaakt
-- [x] Config-bestanden (.env, requirements.txt, .gitignore)
-- [x] Packages geïnstalleerd (venv: C:\Users\dasga\venvs\huurmarkt)
-- [x] Gmail API verbinding (gmail_reader.py — token.json aanwezig)
-- [x] Parser alle drie bronnen (parser.py — wacht op echte alert-mails voor fine-tuning)
-- [x] Database + dedup (database.py — SQLite, UNIQUE constraint op bron+externe_id)
-- [x] Dashboard (dashboard.py — Streamlit op http://localhost:8501)
-- [x] AI-samenvatting (ai_summary.py — vereist ANTHROPIC_API_KEY in .env)
-- [x] Notifier (notifier.py — vereist GMAIL_APP_PASSWORD in .env)
-- [x] Pipeline (run_pipeline.py — python run_pipeline.py [--droog])
+## Status / voortgang (per 11 juni 2026)
+- [x] Volledige pipeline draait in de cloud (GitHub Actions, getriggerd door Supabase pg_cron)
+- [x] Database: Supabase PostgreSQL (DATABASE_URL in .env; lokale SQLite is fallback)
+- [x] Dashboard live op breda-huurmarkt.streamlit.app (met "Nu mail checken"-knop)
+- [x] Bronnen met eigen parser: pararius, funda, huurwoningen, google alerts,
+      rentumo (eigen parser: slug-dedup, "Vergelijkbare aanbiedingen" genegeerd),
+      ikwilhuren, huurwoningportaal (Mailjet-links gedecodeerd), huizenvinder (generiek)
+- [x] Notificaties: e-mail (woningkaarten met foto) + Telegram-bot @HuurMarktBreda_bot
+      (foto per woning) + dagelijkse ochtendcheck (max 1x/dag, claim in systeem_status)
+- [x] Zoekcriteria gebruiker: max €1200/mnd, min 50 m², min 1 aparte slaapkamer
 
-## Wat nu nog nodig is
-1. **Pararius/Funda alerts instellen** (gebruiker): stel zoekopdrachten in op pararius.nl en funda.nl
-   - Pararius: Zoeken → Breda → "Sla zoekopdracht op" → vink e-mailmelding aan
-   - Funda: Account → Mijn zoekopdrachten → e-mailfrequentie instellen
-2. **Anthropic API key** invullen in .env: ANTHROPIC_API_KEY=sk-ant-...
-3. **Gmail App-wachtwoord** aanmaken voor SMTP (niet het gewone wachtwoord!):
-   - Google Account → Beveiliging → 2FA aan → App-wachtwoorden → Maak aan
-   - Vul in .env in: GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
-4. **Parser fine-tunen** zodra de eerste echte alert-mails binnenkomen
+## Geleerde lessen (niet opnieuw tegenaan lopen)
+- GitHub Actions cron werkt niet voor deze repo → planning via Supabase pg_cron
+- Gmail `is:unread` filter is onbetrouwbaar (telefoonmeldingen lezen mails) → `newer_than:1d`
+- Rentumo: Mailchimp-trackinglinks variëren per voorkomen → dedup op advertentie-slug;
+  watermerk-afbeelding (img_sign, base64 in proxy-URL) is geen woningfoto
+- HuurwoningPortaal: links zijn Mailjet (mjt.lu), laatste padsegment = base64url doel-URL
+- `--droog` slaat WEL op in de database (alleen mail/Telegram/markeren overgeslagen)
+- GitHub-secrets zetten kan via API met PyNaCl SealedBox (venv heeft pynacl)
