@@ -1,7 +1,7 @@
 import re
 import hashlib
 from datetime import datetime
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 
 
 def verwerk_mail(mail: dict) -> list:
@@ -236,12 +236,23 @@ def _parseer_rentumo(mail: dict) -> list:
     listing meerdere keren met een ander volgnummer voorkomt. We dedupliceren daarom
     op de slug van de daadwerkelijke advertentie i.p.v. de volledige trackinglink, en
     leiden het adres af uit die slug omdat de omringende teksten vaak afgekapt zijn.
+
+    Onder de echte match(es) staat een sectie "Vergelijkbare aanbiedingen" met
+    suggesties die niet per se nieuw zijn — die slaan we over.
     """
     soup = BeautifulSoup(mail["body"], "html.parser")
     listings = []
     gezien = set()
 
-    for link_tag in soup.find_all("a", href=re.compile(r"getrentumo\.nl")):
+    for el in soup.descendants:
+        if isinstance(el, NavigableString) and "Vergelijkbare aanbiedingen" in el:
+            break
+
+        if getattr(el, "name", None) != "a":
+            continue
+        if not re.search(r"getrentumo\.nl", el.get("href", "")):
+            continue
+        link_tag = el
         href = link_tag.get("href", "")
         match = re.search(r"advertentie%2F([a-zA-Z0-9\-]+)", href)
         if not match:
