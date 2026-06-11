@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.database import initialiseer_database, haal_listings_op, tel_listings, _get_secret
+from src.database import initialiseer_database, haal_listings_op, _get_secret
 
 GITHUB_TOKEN = _get_secret("GITHUB_TOKEN", "")
 GITHUB_REPO = "Bredahuurmarkt/breda-huurmarkt"
@@ -20,23 +20,40 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# --- CSS voor mobiel-vriendelijk design ---
+
+# --- Caching: database-werk maar 1x per sessie / per 2 minuten ---
+@st.cache_resource
+def _eenmalige_db_init():
+    """DDL hoeft maar één keer per serverproces, niet bij elke page-load."""
+    initialiseer_database()
+    return True
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _haal_listings_gecached(dagen: int):
+    return haal_listings_op(dagen=dagen)
+
+
+# --- CSS ---
 st.markdown("""
 <style>
-    /* Algemeen */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     .main > div { padding-top: 1rem; }
 
     /* Header */
     .header-box {
-        background: linear-gradient(135deg, #1a365d, #2b6cb0);
+        background: linear-gradient(135deg, #0f2647 0%, #1d4ed8 60%, #3b82f6 100%);
         color: white;
-        padding: 1.2rem 1.5rem;
-        border-radius: 16px;
+        padding: 1.6rem 1.5rem 1.4rem;
+        border-radius: 20px;
         margin-bottom: 1rem;
         text-align: center;
+        box-shadow: 0 10px 30px rgba(29, 78, 216, 0.35);
     }
-    .header-box h1 { margin: 0; font-size: 1.6rem; }
-    .header-box p  { margin: 0.3rem 0 0; font-size: 0.85rem; opacity: 0.85; }
+    .header-box h1 { margin: 0; font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; }
+    .header-box p  { margin: 0.35rem 0 0; font-size: 0.85rem; opacity: 0.8; }
 
     /* KPI kaartjes */
     .kpi-grid {
@@ -48,94 +65,133 @@ st.markdown("""
     .kpi-card {
         background: white;
         border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 1rem;
+        border-radius: 16px;
+        padding: 1rem 0.75rem;
         text-align: center;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        box-shadow: 0 2px 8px rgba(15, 38, 71, 0.06);
     }
     .kpi-card .nummer {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #2b6cb0;
-        line-height: 1;
+        font-size: 1.9rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.1;
     }
     .kpi-card .label {
-        font-size: 0.75rem;
-        color: #718096;
-        margin-top: 0.3rem;
+        font-size: 0.72rem;
+        color: #64748b;
+        margin-top: 0.25rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
     }
 
     /* Woning kaartjes */
     .woning-card {
         background: white;
         border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 1rem 1.2rem;
-        margin-bottom: 0.75rem;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        border-radius: 18px;
+        overflow: hidden;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 10px rgba(15, 38, 71, 0.07);
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .woning-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(15, 38, 71, 0.14);
+    }
+    .woning-card .foto {
+        width: 100%;
+        height: 190px;
+        object-fit: cover;
+        display: block;
+    }
+    .woning-card .foto-fallback {
+        width: 100%;
+        height: 110px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.4rem;
+        background: linear-gradient(135deg, #e0eaff 0%, #f0f6ff 100%);
+    }
+    .woning-card .inhoud { padding: 0.9rem 1.1rem 1rem; }
+    .woning-card .topregel {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.5rem;
     }
     .woning-card .adres {
-        font-weight: 600;
-        font-size: 1rem;
-        color: #1a202c;
+        font-weight: 700;
+        font-size: 1.02rem;
+        color: #0f172a;
+        letter-spacing: -0.01em;
     }
     .woning-card .prijs {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #2b6cb0;
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #1d4ed8;
+        white-space: nowrap;
     }
     .woning-card .details {
         font-size: 0.8rem;
-        color: #718096;
+        color: #64748b;
         margin-top: 0.3rem;
     }
-    .woning-card .bron-badge {
+    .woning-card .badge-rij { margin-top: 0.55rem; display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .bron-badge {
         display: inline-block;
-        background: #ebf8ff;
-        color: #2b6cb0;
-        font-size: 0.7rem;
-        padding: 2px 8px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: 0.68rem;
+        padding: 3px 10px;
         border-radius: 99px;
-        font-weight: 600;
-        margin-top: 0.5rem;
+        font-weight: 700;
     }
-    .woning-card a {
-        text-decoration: none;
-        color: inherit;
+    .nieuw-badge {
+        display: inline-block;
+        background: #dcfce7;
+        color: #15803d;
+        font-size: 0.68rem;
+        padding: 3px 10px;
+        border-radius: 99px;
+        font-weight: 700;
     }
-
-    /* Filters */
-    .filter-bar {
-        background: #f7fafc;
-        border-radius: 12px;
-        padding: 0.75rem 1rem;
-        margin-bottom: 1rem;
-        border: 1px solid #e2e8f0;
-    }
+    .woning-card a { text-decoration: none; color: inherit; }
 
     /* Sectie titels */
     .sectie-titel {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #2d3748;
-        margin: 1rem 0 0.5rem;
-        padding-bottom: 0.3rem;
-        border-bottom: 2px solid #ebf8ff;
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 1.2rem 0 0.6rem;
+        letter-spacing: -0.01em;
     }
 
     /* Streamlit elementen opschonen */
     #MainMenu, footer, header { visibility: hidden; }
     .block-container { padding: 0.5rem 1rem 2rem; max-width: 680px; }
+    .stButton button {
+        border-radius: 12px;
+        font-weight: 700;
+        border: none;
+        background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+        color: white;
+        padding: 0.6rem 1rem;
+    }
+    .stButton button:hover { filter: brightness(1.08); color: white; }
 </style>
 """, unsafe_allow_html=True)
 
-initialiseer_database()
+_eenmalige_db_init()
 
 # --- Header ---
 st.markdown(f"""
 <div class="header-box">
     <h1>🏠 Breda Huurmarkt</h1>
-    <p>Bijgewerkt op {date.today().strftime('%d %B %Y')}</p>
+    <p>Live overzicht · bijgewerkt {date.today().strftime('%d %B %Y')}</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -153,13 +209,14 @@ if st.button("📬 Nu mail checken", use_container_width=True):
             json={"ref": "main"},
         )
         if resp.status_code == 204:
+            _haal_listings_gecached.clear()  # na de run verse data tonen
             st.success("Pipeline gestart! Dit duurt ongeveer 30-60 seconden — ververs deze pagina daarna voor nieuwe woningen.")
         else:
             st.error(f"Kon de pipeline niet starten ({resp.status_code}): {resp.text}")
 
 # --- Data eerst ophalen (zodat filters de echte bronnen kennen) ---
 dagen_default = 30
-listings = haal_listings_op(dagen=90)  # ruim ophalen, daarna filteren in UI
+listings = _haal_listings_gecached(90)  # ruim ophalen, daarna filteren in UI
 
 if not listings:
     st.info("⏳ Nog geen woningen — de eerste alerts komen vanzelf binnen via je e-mailalerts!")
@@ -186,7 +243,6 @@ with st.expander("⚙️ Filters", expanded=False):
         bronnen = st.multiselect("Bron", beschikbare_bronnen, default=beschikbare_bronnen)
 
 # Tijdsfilter toepassen op basis van de slider
-from datetime import timedelta
 grens = pd.Timestamp.now() - pd.Timedelta(days=dagen)
 df = df_alle[df_alle["gevonden_op"] >= grens].copy()
 
@@ -208,7 +264,7 @@ gem_prijs_str = f"€{gem_prijs:,}".replace(",", ".") if gem_prijs else "—"
 st.markdown(f"""
 <div class="kpi-grid">
     <div class="kpi-card">
-        <div class="nummer">{tel_listings()}</div>
+        <div class="nummer">{len(df_alle)}</div>
         <div class="label">Totaal gevonden</div>
     </div>
     <div class="kpi-card">
@@ -241,21 +297,29 @@ for _, row in df.iterrows():
     link    = row.get("link", "#")
     bron    = row.get("bron", "").capitalize()
     foto    = row.get("foto_url") or ""
+    is_nieuw = row["gevonden_op"].date() == date.today()
     makelaar      = row.get("makelaar") or ""
     makelaar_tel  = row.get("makelaar_tel") or ""
     makelaar_link = row.get("makelaar_link") or ""
 
-    # Foto
-    foto_html = f'<img src="{foto}" style="width:100%; border-radius:8px; margin-bottom:0.75rem; object-fit:cover; max-height:180px;">' if foto else ""
+    # Foto met nette fallback
+    if foto:
+        foto_html = f'<img class="foto" src="{foto}" alt="{adres}">'
+    else:
+        foto_html = '<div class="foto-fallback">🏠</div>'
 
-    # Locatie
-    locatie_html = f'<div class="details">📍 {wijk}, Breda</div>' if wijk else f'<div class="details">📍 Breda</div>'
+    locatie = f"📍 {wijk}, Breda" if wijk else "📍 Breda"
+
+    # Badges
+    badges = f'<span class="bron-badge">{bron}</span>'
+    if is_nieuw:
+        badges += '<span class="nieuw-badge">✨ Nieuw vandaag</span>'
 
     # Contact
     if makelaar_tel:
-        contact_html = f'<a href="tel:{makelaar_tel}" style="display:inline-block; margin-top:0.5rem; background:#2b6cb0; color:white; padding:6px 14px; border-radius:8px; font-size:0.8rem; text-decoration:none;">📞 {makelaar or "Bel makelaar"}</a>'
+        contact_html = f'<a href="tel:{makelaar_tel}" style="display:inline-block; margin-top:0.6rem; background:#1d4ed8; color:white; padding:7px 16px; border-radius:10px; font-size:0.8rem; font-weight:700; text-decoration:none;">📞 {makelaar or "Bel makelaar"}</a>'
     elif makelaar_link:
-        contact_html = f'<a href="{makelaar_link}" target="_blank" style="display:inline-block; margin-top:0.5rem; background:#2b6cb0; color:white; padding:6px 14px; border-radius:8px; font-size:0.8rem; text-decoration:none;">✉️ {makelaar or "Contact makelaar"}</a>'
+        contact_html = f'<a href="{makelaar_link}" target="_blank" style="display:inline-block; margin-top:0.6rem; background:#1d4ed8; color:white; padding:7px 16px; border-radius:10px; font-size:0.8rem; font-weight:700; text-decoration:none;">✉️ {makelaar or "Contact makelaar"}</a>'
     elif makelaar:
         contact_html = f'<div class="details" style="margin-top:0.4rem;">🏢 {makelaar}</div>'
     else:
@@ -263,16 +327,20 @@ for _, row in df.iterrows():
 
     kaart_html = (
         '<div class="woning-card">'
+        f'<a href="{link}" target="_blank">'
         f'{foto_html}'
-        f'<a href="{link}" target="_blank" style="text-decoration:none; color:inherit;">'
-        f'<div class="adres">{adres}</div>'
-        f'{locatie_html}'
-        f'<div class="prijs">{prijs}</div>'
+        '<div class="inhoud">'
+        '<div class="topregel">'
+        f'<span class="adres">{adres}</span>'
+        f'<span class="prijs">{prijs}</span>'
+        '</div>'
+        f'<div class="details">{locatie}</div>'
         f'<div class="details">{details}</div>'
-        f'<div class="details" style="color:#a0aec0; font-size:0.72rem;">Gevonden op {datum}</div>'
-        f'<span class="bron-badge">{bron}</span>'
-        '</a>'
+        f'<div class="details" style="color:#94a3b8; font-size:0.72rem;">Gevonden op {datum}</div>'
+        f'<div class="badge-rij">{badges}</div>'
         f'{contact_html}'
+        '</div>'
+        '</a>'
         '</div>'
     )
     st.markdown(kaart_html, unsafe_allow_html=True)

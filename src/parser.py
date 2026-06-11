@@ -1,4 +1,5 @@
 import re
+import base64
 import hashlib
 from datetime import datetime
 from bs4 import BeautifulSoup, NavigableString
@@ -22,6 +23,8 @@ def verwerk_mail(mail: dict) -> list:
         return parseer_google_alert(mail)
     elif "rentumo" in afzender:
         return _parseer_rentumo(mail)
+    elif "huurwoningportaal" in afzender:
+        return _parseer_huurwoningportaal(mail)
     elif "huizenvinder" in afzender:
         return _parseer_generiek(mail, "huizenvinder", r"huizenvinder\.nl")
     elif "huurportaal" in afzender:
@@ -122,8 +125,9 @@ def _extraheer_prijs(tekst: str) -> int | None:
 
 
 def _extraheer_oppervlakte(tekst: str) -> int | None:
-    """Haalt oppervlakte in m² op. Bijv: '75 m²' → 75"""
-    match = re.search(r"(\d+)\s*m[²2]", tekst, re.IGNORECASE)
+    """Haalt oppervlakte in m² op. Bijv: '75 m²' → 75 (ook '67 m 2' zoals
+    sommige mails het na HTML-platslaan schrijven)."""
+    match = re.search(r"(\d+)\s*m\s?[²2]", tekst, re.IGNORECASE)
     if match:
         return int(match.group(1))
     return None
@@ -283,7 +287,7 @@ def _parseer_rentumo(mail: dict) -> list:
         foto_url = ""
         if container:
             img = container.find("img")
-            if img and img.get("src"):
+            if img and img.get("src") and not _is_rentumo_placeholder(img["src"]):
                 foto_url = img["src"]
 
         listings.append({
@@ -296,6 +300,104 @@ def _parseer_rentumo(mail: dict) -> list:
             "kamers": _extraheer_kamers(container_tekst),
             "foto_url": foto_url,
             "link": f"https://rentumo.nl/advertentie/{slug}",
+            "gevonden_op": _parseer_datum(mail.get("datum", "")),
+        })
+
+    return listings
+
+
+def _is_rentumo_placeholder(src: str) -> bool:
+    """Rentumo's img-proxy (img.rentumo.com) codeert de originele foto-URL in
+    base64-segmenten. De placeholder/watermerk-afbeelding (img_sign) is geen
+    echte woningfoto — die filteren we eruit."""
+    if "img.rentumo.com" not in src:
+        return False
+    # Base64-segmenten achter het size-deel (s:500:500/) samenvoegen en decoderen
+    staart = src.split("/")[-4:]  # de gecodeerde URL is over meerdere segmenten gesplitst
+    blob = "".join(staart).replace(".png", "").replace(".jpg", "").replace(".webp", "")
+    try:
+        gedecodeerd = base64.urlsafe_b64decode(blob + "=" * (-len(blob) % 4)).decode("utf-8", errors="ignore")
+        return "img_sign" in gedecodeerd
+    except Exception:
+        return False
+
+
+def _decodeer_mailjet_link(href: str) -> str:
+    """HuurwoningPortaal verstuurt links via Mailjet (mjt.lu); het laatste
+    pad-segment is de base64url-gecodeerde doel-URL."""
+    seg = href.rstrip("/").split("/")[-1]
+    try:
+        return base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4)).decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+def _parseer_huurwoningportaal(mail: dict) -> list:
+    """
+    Parser voor HuurwoningPortaal alert-mails ("Er zijn nieuwe woningen...").
+    Links lopen via Mailjet-tracking; we decoderen die naar de echte
+    huurwoningportaal.nl/huurwoning/<slug>-URL en dedupliceren op de slug.
+    """
+    soup = BeautifulSoup(mail["body"], "html.parser")
+    listings = []
+    gezien = set()
+
+    for link_tag in soup.find_all("a", href=True):
+        doel = link_tag["href"]
+        if "mjt.lu" in doel:
+            doel = _decodeer_mailjet_link(doel)
+        match = re.search(r"huurwoningportaal\.nl/huurwoning/([a-z0-9\-]+)", doel)
+        if not match:
+            continue
+        slug = match.group(1)
+        if slug in gezien:
+            continue
+        gezien.add(slug)
+
+        # Container met de prijs erin opzoeken
+        container_tekst = ""
+        node = link_tag
+        for _ in range(10):
+            node = node.parent
+            if node is None:
+                break
+            tekst = node.get_text(" ", strip=True)
+            if "€" in tekst and len(tekst) < 600:
+                container_tekst = tekst
+                break
+
+        prijs = _extraheer_prijs(container_tekst)
+        if not prijs:
+            continue
+
+        # Adres staat als "Straatnaam, Breda" in de tekst
+        adres = None
+        m_adres = re.search(r"([A-ZÀ-Ý][\w.'\-]{2,40}(?:\s+[\w.'\-]+){0,3}?)\s*,\s*Breda", container_tekst)
+        if m_adres:
+            adres = m_adres.group(1).strip()
+
+        # Woningfoto (cloudfront) in een ruimere parent zoeken
+        foto_url = ""
+        node = link_tag
+        for _ in range(12):
+            node = node.parent
+            if node is None:
+                break
+            img = node.find("img", src=True)
+            if img and "cloudfront" in img["src"]:
+                foto_url = img["src"]
+                break
+
+        listings.append({
+            "bron": "huurwoningportaal",
+            "externe_id": _maak_id(slug),
+            "adres": adres,
+            "stad": "Breda",
+            "prijs": prijs,
+            "oppervlakte": _extraheer_oppervlakte(container_tekst),
+            "kamers": _extraheer_kamers(container_tekst),
+            "foto_url": foto_url,
+            "link": f"https://huurwoningportaal.nl/huurwoning/{slug}",
             "gevonden_op": _parseer_datum(mail.get("datum", "")),
         })
 

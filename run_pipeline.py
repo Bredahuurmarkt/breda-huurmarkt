@@ -6,9 +6,9 @@ Gebruik:
     python run_pipeline.py --droog    # alles zonder e-mail en markeren
 """
 import argparse
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
-from src.database import initialiseer_database, tel_listings, sla_listing_op, deactiveer_oude_listings
+from src.database import initialiseer_database, tel_listings, sla_listing_op, deactiveer_oude_listings, claim_ochtendcheck
 from src.gmail_reader import haal_alert_mails_op, haal_mail_inhoud_op, markeer_als_gelezen
 from src.parser import verwerk_mail
 
@@ -28,7 +28,7 @@ def main(droog: bool = False):
         print(f"  {verlopen} verlopen woning(en) gedeactiveerd (>21 dagen oud)")
 
     # Eerste run van de dag? (cron start om 07:00 UTC = 09:00/10:00 NL-tijd, afhankelijk van zomer/wintertijd)
-    is_ochtend_check = datetime.utcnow().hour == 7
+    is_ochtend_check = datetime.now(timezone.utc).hour == 7
 
     # Stap 2: alert-mails ophalen
     print("\n[1/4] Alert-mails ophalen uit Gmail...")
@@ -101,14 +101,26 @@ def main(droog: bool = False):
         except Exception as e:
             print(f"  Telegram mislukt: {e}")
 
+        if is_ochtend_check:
+            # Woningenmelding is al bewijs dat de pipeline draait — claim de
+            # ochtendcheck zodat een latere run die ochtend geen "geen nieuws"-bericht stuurt
+            try:
+                claim_ochtendcheck()
+            except Exception:
+                pass
+
     print("\n✓ Pipeline klaar")
     print(f"  Database bevat nu {tel_listings()} listings")
 
 
 def _stuur_ochtendcheck():
-    """Stuurt elke ochtend (eerste run van de dag) een Telegram-berichtje, ook als er niets nieuws is —
-    zodat duidelijk is dat de pipeline draait."""
+    """Stuurt elke ochtend een Telegram-berichtje, ook als er niets nieuws is —
+    zodat duidelijk is dat de pipeline draait. Via claim_ochtendcheck() maximaal
+    1x per dag, ook al draait de pipeline elke 30 minuten."""
     try:
+        if not claim_ochtendcheck():
+            print("  Ochtendcheck vandaag al verstuurd — overgeslagen")
+            return
         from src.telegram_notify import stuur_ochtendcheck
         stuur_ochtendcheck(tel_listings())
     except Exception as e:

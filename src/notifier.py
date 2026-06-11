@@ -40,43 +40,44 @@ def stuur_dagelijks_overzicht(samenvatting: str, nieuwe_listings: list, datum: s
 
 
 def _maak_html(samenvatting: str, listings: list, datum: str) -> str:
-    listing_rijen = ""
+    kaarten = ""
     for l in listings:
-        prijs = f"€{l['prijs']}/mnd" if l.get("prijs") else "—"
-        opp = f"{l['oppervlakte']} m²" if l.get("oppervlakte") else "—"
-        kamers = str(l["kamers"]) if l.get("kamers") else "—"
+        prijs = f"€ {l['prijs']:,}".replace(",", ".") + " /mnd" if l.get("prijs") else "prijs onbekend"
+        details = " · ".join(filter(None, [
+            f"{l['oppervlakte']} m²" if l.get("oppervlakte") else None,
+            f"{l['kamers']} kamers" if l.get("kamers") else None,
+            l.get("bron", "").capitalize() or None,
+        ]))
         link = l.get("link", "#")
         adres = l.get("adres") or "Adres onbekend"
-        listing_rijen += f"""
-        <tr>
-            <td><a href="{link}">{adres}</a></td>
-            <td>{prijs}</td>
-            <td>{opp}</td>
-            <td>{kamers}</td>
-            <td>{l['bron']}</td>
-        </tr>"""
+        foto = l.get("foto_url") or ""
+        foto_html = (
+            f'<img src="{foto}" alt="{adres}" width="640" '
+            f'style="display:block; width:100%; max-height:260px; object-fit:cover;">'
+            if foto else ""
+        )
+        kaarten += f"""
+    <div style="border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; margin:0 0 20px 0; background:#ffffff;">
+        {foto_html}
+        <div style="padding:16px 20px;">
+            <p style="margin:0 0 4px 0; font-size:18px; font-weight:bold; color:#1a202c;">{adres}</p>
+            <p style="margin:0 0 4px 0; font-size:17px; color:#2b6cb0; font-weight:bold;">{prijs}</p>
+            <p style="margin:0 0 12px 0; font-size:14px; color:#718096;">{details}</p>
+            <a href="{link}" style="display:inline-block; background:#2b6cb0; color:#ffffff; text-decoration:none;
+               padding:10px 22px; border-radius:8px; font-size:14px; font-weight:bold;">Bekijk woning →</a>
+        </div>
+    </div>"""
 
     return f"""<!DOCTYPE html>
 <html lang="nl">
 <head><meta charset="UTF-8"></head>
-<body style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px;">
+<body style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background:#f7fafc;">
     <h1 style="color: #2c5282;">🏠 Breda Huurmarkt — {datum}</h1>
-    <div style="background: #ebf8ff; border-left: 4px solid #4299e1; padding: 16px; margin: 20px 0;">
+    <div style="background: #ebf8ff; border-left: 4px solid #4299e1; padding: 16px; margin: 20px 0; border-radius:0 8px 8px 0;">
         <p style="margin:0; white-space: pre-wrap;">{samenvatting}</p>
     </div>
     <h2 style="color: #2d3748;">Nieuwe woningen ({len(listings)})</h2>
-    <table style="width:100%; border-collapse:collapse;">
-        <thead>
-            <tr style="background:#2c5282; color:white;">
-                <th style="padding:8px; text-align:left;">Adres</th>
-                <th style="padding:8px;">Prijs</th>
-                <th style="padding:8px;">Opp.</th>
-                <th style="padding:8px;">Kamers</th>
-                <th style="padding:8px;">Bron</th>
-            </tr>
-        </thead>
-        <tbody>{listing_rijen}</tbody>
-    </table>
+    {kaarten}
     <p style="color:#718096; font-size:12px; margin-top:30px;">
         Breda Huurmarkt Monitor — automatisch gegenereerd
     </p>

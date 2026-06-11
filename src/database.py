@@ -87,6 +87,12 @@ def _initialiseer_postgres():
                     aangemaakt  TEXT NOT NULL
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS systeem_status (
+                    sleutel TEXT PRIMARY KEY,
+                    waarde  TEXT
+                )
+            """)
         conn.commit()
     finally:
         conn.close()
@@ -116,6 +122,12 @@ def _initialiseer_sqlite():
                 datum       TEXT NOT NULL UNIQUE,
                 tekst       TEXT NOT NULL,
                 aangemaakt  TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS systeem_status (
+                sleutel TEXT PRIMARY KEY,
+                waarde  TEXT
             )
         """)
         conn.commit()
@@ -294,6 +306,36 @@ def sla_samenvatting_op(datum: str, tekst: str):
                 VALUES (?, ?, ?)
             """, (datum, tekst, datetime.now().isoformat()))
             conn.commit()
+
+
+def claim_ochtendcheck() -> bool:
+    """Claimt de ochtendcheck van vandaag. Geeft True terug als deze run de eerste
+    is die hem claimt — met meerdere runs per uur voorkomt dit dubbele berichten.
+    De claim is atomair (één UPSERT), dus ook gelijktijdige runs botsen niet."""
+    vandaag = datetime.now().strftime("%Y-%m-%d")
+    sql = """
+        INSERT INTO systeem_status (sleutel, waarde)
+        VALUES ('laatste_ochtendcheck', {p})
+        ON CONFLICT (sleutel) DO UPDATE SET waarde = excluded.waarde
+        WHERE systeem_status.waarde IS DISTINCT FROM excluded.waarde
+    """
+    if USE_POSTGRES:
+        conn = _verbinding()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql.format(p="%s"), (vandaag,))
+                geclaimd = cur.rowcount > 0
+            conn.commit()
+            return geclaimd
+        finally:
+            conn.close()
+    else:
+        with _verbinding() as conn:
+            cur = conn.execute(
+                sql.format(p="?").replace("IS DISTINCT FROM", "IS NOT"), (vandaag,)
+            )
+            conn.commit()
+            return cur.rowcount > 0
 
 
 def tel_listings() -> int:
