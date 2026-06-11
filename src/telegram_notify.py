@@ -24,6 +24,26 @@ def stuur_nieuwe_woningen_telegram(listings: list):
     print(f"Telegram verstuurd (status {resp.status_code})")
 
 
+def stuur_ochtendcheck(aantal_listings: int):
+    """Stuurt een kort dagelijks statusbericht, ook als er geen nieuwe woningen zijn —
+    zodat duidelijk is dat de pipeline draait."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram niet geconfigureerd (TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID ontbreken) — overgeslagen.")
+        return
+
+    bericht = (
+        f"✅ Goedemorgen! Pipeline draait.\n"
+        f"Geen nieuwe woningen vandaag (nog).\n"
+        f"{aantal_listings} actieve woning(en) in de database."
+    )
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    resp = requests.post(url, json={
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": bericht,
+    }, timeout=15)
+    print(f"Ochtendcheck verstuurd (status {resp.status_code})")
+
+
 def _maak_bericht(listings: list) -> str:
     regels = [f"🏠 {len(listings)} nieuwe woning(en) in Breda!"]
     for l in listings:

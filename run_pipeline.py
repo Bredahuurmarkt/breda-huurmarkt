@@ -6,7 +6,7 @@ Gebruik:
     python run_pipeline.py --droog    # alles zonder e-mail en markeren
 """
 import argparse
-from datetime import date
+from datetime import date, datetime
 
 from src.database import initialiseer_database, tel_listings, sla_listing_op, deactiveer_oude_listings
 from src.gmail_reader import haal_alert_mails_op, haal_mail_inhoud_op, markeer_als_gelezen
@@ -27,6 +27,9 @@ def main(droog: bool = False):
     if verlopen:
         print(f"  {verlopen} verlopen woning(en) gedeactiveerd (>21 dagen oud)")
 
+    # Eerste run van de dag? (cron start om 07:00 UTC = 09:00/10:00 NL-tijd, afhankelijk van zomer/wintertijd)
+    is_ochtend_check = datetime.utcnow().hour == 7
+
     # Stap 2: alert-mails ophalen
     print("\n[1/4] Alert-mails ophalen uit Gmail...")
     mails = haal_alert_mails_op(max_results=50)
@@ -34,6 +37,8 @@ def main(droog: bool = False):
 
     if not mails:
         print("  Niets te verwerken. Klaar.")
+        if is_ochtend_check and not droog:
+            _stuur_ochtendcheck()
         return
 
     # Stap 3: mails verwerken
@@ -61,6 +66,8 @@ def main(droog: bool = False):
 
     if not nieuwe_listings:
         print("\n[3/4] Geen nieuwe woningen — samenvatting en e-mail overgeslagen")
+        if is_ochtend_check and not droog:
+            _stuur_ochtendcheck()
         print("\n✓ Pipeline klaar")
         print(f"  Database bevat nu {tel_listings()} listings")
         return
@@ -96,6 +103,16 @@ def main(droog: bool = False):
 
     print("\n✓ Pipeline klaar")
     print(f"  Database bevat nu {tel_listings()} listings")
+
+
+def _stuur_ochtendcheck():
+    """Stuurt elke ochtend (eerste run van de dag) een Telegram-berichtje, ook als er niets nieuws is —
+    zodat duidelijk is dat de pipeline draait."""
+    try:
+        from src.telegram_notify import stuur_ochtendcheck
+        stuur_ochtendcheck(tel_listings())
+    except Exception as e:
+        print(f"  Ochtendcheck mislukt: {e}")
 
 
 if __name__ == "__main__":
