@@ -253,6 +253,7 @@ def _parseer_rentumo(mail: dict) -> list:
 
         # Zoek de eerste bovenliggende container met een prijs erin
         container_tekst = ""
+        container = None
         node = link_tag
         for _ in range(10):
             node = node.parent
@@ -261,11 +262,18 @@ def _parseer_rentumo(mail: dict) -> list:
             tekst = node.get_text(" ", strip=True)
             if "€" in tekst and len(tekst) < 150:
                 container_tekst = tekst
+                container = node
                 break
 
         prijs = _extraheer_prijs(container_tekst)
         if not prijs:
             continue  # Geen prijs = geen echte listing (bijv. de "bekijk je matches"-link)
+
+        foto_url = ""
+        if container:
+            img = container.find("img")
+            if img and img.get("src"):
+                foto_url = img["src"]
 
         listings.append({
             "bron": "rentumo",
@@ -275,6 +283,7 @@ def _parseer_rentumo(mail: dict) -> list:
             "prijs": prijs,
             "oppervlakte": _extraheer_oppervlakte(container_tekst),
             "kamers": _extraheer_kamers(container_tekst),
+            "foto_url": foto_url,
             "link": f"https://rentumo.nl/advertentie/{slug}",
             "gevonden_op": _parseer_datum(mail.get("datum", "")),
         })
