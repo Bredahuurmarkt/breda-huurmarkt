@@ -223,12 +223,15 @@ if not listings:
     st.stop()
 
 df_alle = pd.DataFrame(listings)
-# Datums tijdzone-veilig maken: alles naar UTC, dan naar NL-tijd, dan tz weghalen
-df_alle["gevonden_op"] = (
-    pd.to_datetime(df_alle["gevonden_op"], utc=True, errors="coerce")
-    .dt.tz_convert("Europe/Amsterdam")
-    .dt.tz_localize(None)
-)
+# Datums tijdzone-veilig maken: alles naar UTC, dan naar NL-tijd, dan tz weghalen.
+# tz_convert("Europe/Amsterdam") heeft de IANA-tijdzonedatabase nodig (tzdata).
+# Mocht die op de server ooit ontbreken, dan vallen we terug op kale UTC i.p.v.
+# de hele pagina te laten crashen.
+_utc = pd.to_datetime(df_alle["gevonden_op"], utc=True, errors="coerce")
+try:
+    df_alle["gevonden_op"] = _utc.dt.tz_convert("Europe/Amsterdam").dt.tz_localize(None)
+except Exception:
+    df_alle["gevonden_op"] = _utc.dt.tz_localize(None)
 beschikbare_bronnen = sorted(df_alle["bron"].dropna().unique().tolist())
 
 # --- Filters (compact) ---
