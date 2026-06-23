@@ -112,3 +112,16 @@ Funda + Huurwoningen.nl, GitHub Actions + Supabase, Telegram bot, trendanalyse, 
 - HuurwoningPortaal: links zijn Mailjet (mjt.lu), laatste padsegment = base64url doel-URL
 - `--droog` slaat WEL op in de database (alleen mail/Telegram/markeren overgeslagen)
 - GitHub-secrets zetten kan via API met PyNaCl SealedBox (venv heeft pynacl)
+- **Gmail-token verloopt elke 7 dagen** zolang de OAuth-app in "Testing"-modus staat
+  (fout: `invalid_grant: Token has been expired or revoked`, hele pipeline crasht).
+  Permanente fix: app publiceren naar Productie (Google Cloud Console → OAuth consent
+  screen → Publish App). Tijdelijke fix: lokaal opnieuw inloggen (InstalledAppFlow.
+  run_local_server) → nieuwe token.json → base64 → GitHub-secret GMAIL_TOKEN_JSON.
+- **iCloud Drive corrumpeert deze repo** door bewerkte bestanden te dupliceren naar
+  "naam 2.ext" (ook binnen .git: `index 2`, `refs/heads/main 2`). Symptomen: bestanden
+  ineens untracked, `bad object refs/heads/main 2`, of een bestand dat als verwijdering
+  in een commit belandt. Herstel: backup .env/token.json/credentials.json, verse
+  `git clone` buiten iCloud, `.git` omwisselen, `git reset --hard origin/main`,
+  gitignore-bestanden terugzetten. Check vóór elke commit `git status` op "… 2"-bestanden.
+- Dashboard heeft `tzdata` in requirements nodig (Streamlit Cloud mist IANA-tijdzones);
+  pandas NaN-velden nooit met `x or ""` afhandelen (NaN is truthy) → eigen `_tekst()`-helper.
